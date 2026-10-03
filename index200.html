@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Визиты</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Палитра в цветах магазинов: бордо + сливочный */
+  :root {
+    --bg: #F4ECDF; --card: #FFFAF1; --text: #2B1714; --hint: #8B776C;
+    --accent: #8C1D2C; --on-accent: #FFF6E8; --warn: #C9821F; --line: rgba(140, 29, 44, .24);
+  }
+  [data-theme="dark"] {
+    --bg: #1C1210; --card: #2A1C19; --text: #F4EADB; --hint: #A8948A;
+    --accent: #B33445; --on-accent: #FFF6E8; --warn: #E2A445; --line: rgba(244, 234, 219, .13);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Segoe UI", sans-serif; }
+  #app { padding: 18px 14px 110px; max-width: 560px; margin: 0 auto; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, textarea:focus-visible, label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header h1 { font-size: 28px; line-height: 1.12; margin: 2px 0 14px; letter-spacing: -0.02em; font-weight: 800; }
+  .sub { color: var(--hint); margin: 0; font-size: 15px; }
+  .hint { margin: -4px 4px 10px; font-size: 14px; }
+  .note { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--warn) 16%, transparent); font-size: 14px; }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--card); border-radius: 12px; padding: 3px; margin-bottom: 18px; }
+  .tabs button { border: 0; background: none; padding: 9px; border-radius: 10px; font-weight: 600; color: var(--hint); }
+  .tabs button.on { background: var(--accent); color: var(--on-accent); }
+
+  section { margin-top: 24px; }
+  .step { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; margin: 0 4px 10px; }
+  .step b { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 14px; flex: none; }
+  .box { background: var(--card); border-radius: 16px; overflow: hidden; margin-bottom: 10px; }
+  .empty { color: var(--hint); padding: 16px; text-align: center; font-size: 15px; }
+
+  /* Идущий визит — главный акцент */
+  .live { background: var(--accent); color: var(--on-accent); padding: 16px; border-radius: 18px; margin-bottom: 18px; }
+  .live p { margin: 0; opacity: .75; font-size: 14px; }
+  .live h3 { margin: 4px 0 12px; font-size: 21px; }
+  .live .btn { background: var(--on-accent); color: var(--accent); width: 100%; }
+
+  .row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px;
+    border: 0; background: none; text-align: left; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row small { display: block; color: var(--hint); font-size: 13px; font-weight: 400; }
+  .tag { color: var(--hint); font-size: 14px; white-space: nowrap; }
+  .btn { border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: var(--on-accent); font-weight: 600; white-space: nowrap; }
+  .btn.ghost { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+  [data-theme="dark"] .btn.ghost { color: var(--text); }
+  .btn.wide { width: 100%; padding: 12px; margin-bottom: 10px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .seg button { border: 1.5px solid var(--line); background: var(--card); border-radius: 12px; padding: 9px 8px; font-weight: 600; }
+  .seg button small { display: block; font-weight: 400; color: var(--hint); font-size: 12px; }
+  .seg button.on { border-color: var(--accent); }
+
+  /* План: магазины × дни */
+  .grid { background: var(--card); border-radius: 16px; padding: 4px 8px; }
+  .grow { display: grid; grid-template-columns: minmax(88px, 1fr) repeat(7, 32px); gap: 2px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .grow.head { border-top: 0; font-size: 12px; color: var(--hint); text-align: center; line-height: 1.15; padding-bottom: 4px; }
+  .grow.head .past { opacity: .45; }
+  .grow.head b { display: block; color: var(--text); font-size: 13px; }
+  .sname { font-size: 14px; font-weight: 600; line-height: 1.2; padding-right: 4px; overflow-wrap: anywhere; }
+  .sname small { display: block; font-weight: 400; color: var(--hint); font-size: 12px; margin-top: 2px; }
+  .sname.under small { color: var(--warn); font-weight: 600; }
+  .cell { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line); background: none; justify-self: center; padding: 0; display: grid; place-items: center; }
+  .cell.on { background: var(--accent); border-color: var(--accent); }
+  .cell.on::after { content: ""; width: 5px; height: 10px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+  .cell:disabled { opacity: .35; }
+
+  textarea { width: 100%; min-height: 70px; resize: vertical; border: 1.5px solid var(--line); border-radius: 12px;
+    background: var(--card); padding: 10px 12px; outline: none; }
+  .photo { display: grid; place-items: center; margin-top: 10px; min-height: 96px; border: 1.5px dashed var(--line);
+    border-radius: 12px; color: var(--hint); font-size: 15px; overflow: hidden; background: var(--card); }
+  .photo img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
+  .photo input, .shot input { display: none; }
+  #geo { margin: 16px 4px 0; font-size: 14px; }
+
+  /* Чек-лист: пункт и две кнопки в одну строку */
+  .item { padding: 11px 12px 11px 16px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .iline { display: flex; align-items: center; gap: 10px; }
+  .itxt { flex: 1; font-size: 15px; }
+  .yn { display: flex; gap: 6px; flex: none; }
+  .yn button { border: 1.5px solid var(--line); background: none; border-radius: 10px; padding: 6px 12px; font-weight: 600; font-size: 14px; }
+  .yn .y.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .yn .n.on { background: var(--warn); border-color: var(--warn); color: #2B1714; }
+  .fix { margin-top: 10px; padding-left: 12px; border-left: 3px solid var(--warn); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 13px; font-size: 14px; }
+  .chip.on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+  .shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .shot { width: 74px; height: 74px; border-radius: 12px; overflow: hidden; border: 1.5px dashed var(--line); display: grid; place-items: center;
+    color: var(--hint); font-size: 26px; background: var(--card); padding: 0; position: relative; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; }
+
+  .missing { box-shadow: 0 0 0 2px var(--warn); }
+  .link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; font-size: 15px; }
+  [data-theme="dark"] .link { color: var(--text); text-decoration: underline; }
+  .htop { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .guide { background: var(--card); border-radius: 16px; padding: 4px 16px; margin-bottom: 12px; }
+  .guide div { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .guide div:first-child { border-top: 0; }
+  .guide b.n { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 14px; flex: none; }
+  .guide p { margin: 0; font-size: 15px; }
+  .guide p strong { display: block; margin-bottom: 2px; }
+  .done { text-align: center; padding-top: 18vh; }
+  .done .big { width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 36px; margin: 0 auto; }
+  .done h1 { font-size: 26px; margin: 14px 0 6px; }
+  @media (prefers-reduced-motion: no-preference) { .done .big { animation: pop .4s ease-out; } }
+  @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+</style>
+</head>
+<body>
+<div id="app"><p class="sub">Загружаю…</p></div>
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbzb_xoonOuHBVqj4-W_j_Dnndxa3_UOucFThtatHkE5LtPDRo4bR7uHf21EgBp0eQY/exec';
+
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+function applyTheme() {
+  const dark = tg.colorScheme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const css = getComputedStyle(document.documentElement);
+  const v = n => css.getPropertyValue(n).trim();
+  try { tg.setHeaderColor(v('--bg')); tg.setBackgroundColor(v('--bg')); if (tg.setBottomBarColor) tg.setBottomBarColor(v('--bg')); } catch (e) {}
+  try { tg.MainButton.setParams({ color: v('--accent'), text_color: v('--on-accent') }); } catch (e) {}
+}
+applyTheme();
+tg.onEvent('themeChanged', applyTheme);
+
+const app = document.getElementById('app');
+let S = {};
+let mainFn = null, backFn = null;
+tg.MainButton.onClick(() => mainFn && mainFn());
+tg.BackButton.onClick(() => backFn && backFn());
+function setMain(text, fn) { mainFn = fn || null; if (fn) { tg.MainButton.setText(text); tg.MainButton.show(); } else tg.MainButton.hide(); }
+function setBack(fn) { backFn = fn || null; fn ? tg.BackButton.show() : tg.BackButton.hide(); }
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const el = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const addr = name => { const s = S.d.stores.find(x => x.name === name); return s ? s.addr : ''; };
+
+async function api(action, extra) {
+  const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action, initData: tg.initData }, extra || {})) });
+  return r.json();
+}
+function fatal(msg) { setMain(null); setBack(null); app.innerHTML = '<div class="done"><p class="sub">' + esc(msg) + '</p></div>'; }
+function fail(node, msg) {
+  if (node) { node.classList.add('missing'); node.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  tg.HapticFeedback.notificationOccurred('error');
+  tg.showAlert(msg);
+}
+
+// Сначала показываем данные с прошлого открытия, свежие подтягиваем в фоне
+const CACHE_KEY = 'init_' + ((tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || '');
+let touched = false;
+document.addEventListener('click', () => { touched = true; }, true);
+function fresh(d) { S = { d, tab: S.tab || 'today', week: S.week || 0, plans: d.weeks.map(w => w.days.map(x => x.stores.slice())), picker: false }; }
+
+async function load() {
+  setMain(null); setBack(null);
+  if (!tg.initData) return fatal('Telegram не передал данные (код 0). Открой приложение кнопкой «Визиты» в боте.');
+  touched = false;
+  let shown = false;
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (c && c.today) { fresh(c); renderHome(); shown = true; }
+  } catch (e) {}
+  if (!shown) app.innerHTML = '<p class="sub">Загружаю…</p>';
+  try {
+    const d = await api('init');
+    if (!d.ok) { try { localStorage.removeItem(CACHE_KEY); } catch (e) {} return fatal(d.error); }
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+    if (!shown || !touched) { fresh(d); renderHome(); }
+    else S.d = d; // человек уже что-то нажал — не перерисовываем у него под пальцами
+  } catch (e) {
+    if (!shown) fatal('Не получилось загрузиться. Проверь интернет и открой приложение ещё раз.');
+  }
+}
+
+/* ---------- Главная ---------- */
+function renderHome() {
+  setBack(null); tg.disableClosingConfirmation();
+  const d = S.d;
+  app.innerHTML = `<header><div class="htop"><p class="sub">${esc(d.name)}</p><button class="link" id="help">Как пользоваться</button></div><h1>${S.tab === 'today' ? esc(d.today) : 'План визитов'}</h1></header>
+    <div class="tabs"><button data-t="today">Сегодня</button><button data-t="plan">План</button></div><div id="body"></div>`;
+  app.querySelectorAll('.tabs button').forEach(b => {
+    b.classList.toggle('on', b.dataset.t === S.tab);
+    b.onclick = () => { S.tab = b.dataset.t; renderHome(); };
+  });
+  document.getElementById('help').onclick = renderHelp;
+  const body = document.getElementById('body');
+  S.tab === 'today' ? renderToday(body) : renderPlan(body);
+  // при первом открытии сразу показываем инструкцию
+  try { if (!localStorage.getItem('help_seen')) { localStorage.setItem('help_seen', '1'); renderHelp(); } } catch (e) {}
+}
+
+/* ---------- Инструкция ---------- */
+const GUIDE = [
+  ['Составь план', 'Во вкладке «План» отметь кружками, в какие дни в какие магазины едешь, и нажми «Сохранить план». Каждый магазин нужно посетить не меньше двух раз в месяц: те, где визитов пока меньше, подсвечены оранжевым. В пятницу бот напомнит про план на следующую неделю.'],
+  ['Утром смотри план', 'В 8:00 бот присылает, куда ехать сегодня. Тот же список во вкладке «Сегодня».'],
+  ['Отметься в магазине', 'Нажми «Начать визит», сфотографируй вход и нажми «Я на месте». Время прихода записывается в этот момент, поэтому отмечайся, когда уже зашёл(зашла) в магазин.'],
+  ['Пройди чек-лист', 'По каждому пункту выбери «Да» или «Нет». На «Нет» коротко напиши, что не так и что сделано, и сфотографируй проблему.'],
+  ['Расскажи, что сделано', 'Отметь, чем занимался(ась): хозвопросы, товар, поставщики, персонал. Опиши своими словами, можно добавить фото.'],
+  ['Закончи визит перед отъездом', 'Нажми «Закончить визит», время ухода запишется. Если забыть, в 19:00 придёт напоминание, а в 20:00 визит отметится как незакрытый.']
+];
+function renderHelp() {
+  setMain(null);
+  setBack(() => renderHome());
+  app.innerHTML = `<header><p class="sub">Инструкция</p><h1>Как пользоваться</h1></header>
+    <div class="guide">${GUIDE.map((g, i) => `<div><b class="n">${i + 1}</b><p><strong>${esc(g[0])}</strong>${esc(g[1])}</p></div>`).join('')}</div>
+    <div class="guide">
+      <div><p><strong>Приехал(а) не по плану</strong>На вкладке «Сегодня» нажми «Визит вне плана», выбери магазин и напиши, зачем приехал(а).</p></div>
+      <div><p><strong>Приложение закрылось посреди визита</strong>Заполненное не пропадёт. Открой приложение снова и нажми «Продолжить визит».</p></div>
+      <div><p><strong>Пропал интернет</strong>Заполняй дальше. Когда связь появится, нажми «Закончить визит» ещё раз.</p></div>
+      <div><p><strong>Нет нужного магазина</strong>Список магазинов ведёт руководитель. Напиши ему, он добавит.</p></div>
+    </div>
+    <button class="btn wide" id="gotit">Понятно</button>`;
+  document.getElementById('gotit').onclick = () => renderHome();
+}
+
+function renderToday(body) {
+  setMain(null);
+  const d = S.d;
+  if (d.open) {
+    const c = el(`<div class="live"><p>Визит идёт с ${esc(d.open.arrived)}</p><h3>${esc(d.open.store)}</h3><button class="btn">Продолжить визит</button></div>`);
+    c.querySelector('button').onclick = () => openVisit(d.open);
+    body.appendChild(c);
+  }
+  const list = el('<div class="box"></div>');
+  if (!d.todayPlan.length) list.innerHTML = '<div class="empty">На сегодня в плане пусто. Отметь магазины во вкладке «План».</div>';
+  d.todayPlan.forEach(name => {
+    const done = d.todayVisited.includes(name);
+    const r = el(`<div class="row"><div><b>${esc(name)}</b>${addr(name) ? '<small>' + esc(addr(name)) + '</small>' : ''}</div>
+      ${done ? '<span class="tag">✓ Визит был</span>' : '<button class="btn">Начать визит</button>'}</div>`);
+    if (!done) r.querySelector('button').onclick = () => startCheckin(name, true);
+    list.appendChild(r);
+  });
+  body.appendChild(list);
+
+  const extra = el(`<button class="btn ghost wide">${S.picker ? 'Скрыть список' : 'Визит вне плана'}</button>`);
+  extra.onclick = () => { S.picker = !S.picker; renderHome(); };
+  body.appendChild(extra);
+  if (S.picker) {
+    const p = el('<div class="box"></div>');
+    if (!d.stores.length) p.innerHTML = '<div class="empty">Список магазинов пуст. Напиши руководителю.</div>';
+    d.stores.forEach(s => {
+      const b = el(`<button class="row"><div><b>${esc(s.name)}</b>${s.addr ? '<small>' + esc(s.addr) + '</small>' : ''}</div></button>`);
+      b.onclick = () => { S.picker = false; startCheckin(s.name, d.todayPlan.includes(s.name)); };
+      p.appendChild(b);
+    });
+    body.appendChild(p);
+  }
+
+  const under = d.stores.filter(s => (d.month[s.name] || 0) < d.minVisits);
+  if (under.length) body.appendChild(el(`<div class="note">В этом месяце пока меньше ${d.minVisits} визитов: ${under.map(s => esc(s.name) + ' (' + (d.month[s.name] || 0) + ')').join(', ')}</div>`));
+}
+
+/* ---------- План: таблица магазины × дни ---------- */
+function renderPlan(body) {
+  const d = S.d, w = d.weeks[S.week], p = S.plans[S.week];
+  const seg = el(`<div class="seg">${d.weeks.map((x, i) => `<button class="${i === S.week ? 'on' : ''}">${i ? 'Следующая' : 'Эта неделя'}<small>${esc(x.label)}</small></button>`).join('')}</div>`);
+  seg.querySelectorAll('button').forEach((b, i) => b.onclick = () => { S.week = i; renderHome(); });
+  body.appendChild(seg);
+  if (!d.stores.length) { body.appendChild(el('<div class="box empty">Список магазинов пуст. Напиши руководителю.</div>')); return setMain(null); }
+
+  const grid = el('<div class="grid"></div>');
+  const head = el('<div class="grow head"><span></span></div>');
+  w.days.forEach(day => {
+    const [wd, num] = day.label.split(', ');
+    head.appendChild(el(`<span class="${day.past ? 'past' : ''}">${esc(wd)}<b>${esc(num.split(' ')[0])}</b></span>`));
+  });
+  grid.appendChild(head);
+  d.stores.forEach(s => {
+    const n = d.month[s.name] || 0, under = n < d.minVisits;
+    const r = el(`<div class="grow"><div class="sname${under ? ' under' : ''}">${esc(s.name)}<small>в этом месяце: ${n}</small></div></div>`);
+    w.days.forEach((day, i) => {
+      const on = p[i].includes(s.name);
+      const c = el(`<button class="cell${on ? ' on' : ''}" aria-label="${esc(s.name)}, ${esc(day.label)}" aria-pressed="${on}"></button>`);
+      c.disabled = day.past;
+      c.onclick = () => {
+        const k = p[i].indexOf(s.name);
+        k >= 0 ? p[i].splice(k, 1) : p[i].push(s.name);
+        c.classList.toggle('on', k < 0);
+        c.setAttribute('aria-pressed', k < 0);
+        tg.HapticFeedback.selectionChanged();
+      };
+      r.appendChild(c);
+    });
+    grid.appendChild(r);
+  });
+  body.appendChild(grid);
+  body.appendChild(el(`<p class="sub hint" style="margin-top:10px">Оранжевым выделены магазины, где в этом месяце меньше ${d.minVisits} визитов.</p>`));
+  setMain('Сохранить план', savePlan);
+}
+
+async function savePlan() {
+  if (tg.MainButton.isProgressVisible) return;
+  const w = S.d.weeks[S.week], days = {};
+  w.days.forEach((day, i) => { if (!day.past) days[day.key] = S.plans[S.week][i]; });
+  tg.MainButton.showProgress(false);
+  try {
+    const r = await api('savePlan', { week: w.key, days });
+    tg.MainButton.hideProgress();
+    if (!r.ok) return tg.showAlert(r.error);
+    tg.HapticFeedback.notificationOccurred('success');
+    tg.showAlert('План сохранён: визитов ' + r.count + '.', load);
+  } catch (e) { tg.MainButton.hideProgress(); tg.showAlert('Не получилось сохранить. Проверь интернет и попробуй ещё раз.'); }
+}
+
+/* ---------- Отметка в магазине ---------- */
+function startCheckin(store, inPlan) {
+  if (S.d.open) return tg.showAlert('Сначала закончи визит в «' + S.d.open.store + '».');
+  S.ci = { store, inPlan, reason: '', photo: '', geo: null, geoState: 'wait' };
+  renderCheckin();
+  getGeo().then(g => {
+    if (!S.ci || S.ci.store !== store) return;
+    S.ci.geo = g; S.ci.geoState = g ? 'ok' : 'fail';
+    const n = document.getElementById('geo'); if (n) n.textContent = geoText();
+  });
+}
+function geoText() {
+  return { wait: '📍 Определяю геопозицию…', ok: '📍 Геопозиция есть', fail: '📍 Геопозицию определить не удалось, отметка всё равно засчитается' }[S.ci.geoState];
+}
+function renderCheckin() {
+  const c = S.ci;
+  setBack(() => { S.ci = null; renderHome(); });
+  tg.enableClosingConfirmation();
+  app.innerHTML = `<header><p class="sub">${c.inPlan ? 'Визит по плану' : 'Визит вне плана'}</p><h1>${esc(c.store)}</h1></header>
+    <section><div class="step"><b>1</b>Сфотографируй вход в магазин</div><div id="ph"></div></section>
+    ${c.inPlan ? '' : '<section><div class="step"><b>2</b>Зачем приехал(а)</div><textarea id="reason" placeholder="Например: позвонили из магазина, сломался холодильник"></textarea></section>'}
+    <p class="sub" id="geo">${geoText()}</p>`;
+  document.getElementById('ph').appendChild(photoField(c, 'photo', '📷 Сделать фото входа'));
+  const r = document.getElementById('reason');
+  if (r) { r.value = c.reason; r.oninput = () => { c.reason = r.value; r.classList.remove('missing'); }; }
+  setMain('Я на месте', checkin);
+}
+async function checkin() {
+  const c = S.ci;
+  if (tg.MainButton.isProgressVisible) return;
+  if (!c.photo) return fail(document.querySelector('#ph .photo'), 'Сфотографируй вход в магазин.');
+  if (!c.inPlan && !c.reason.trim()) return fail(document.getElementById('reason'), 'Напиши, зачем приехал(а) вне плана.');
+  tg.MainButton.showProgress(false);
+  try {
+    const r = await api('checkin', { store: c.store, reason: c.reason, photo: c.photo.split(',')[1], lat: c.geo ? c.geo.lat : null, lon: c.geo ? c.geo.lon : null });
+    tg.MainButton.hideProgress();
+    if (!r.ok) return tg.showAlert(r.error);
+    tg.HapticFeedback.notificationOccurred('success');
+    S.d.open = { id: r.id, store: r.store, arrived: r.arrived };
+    S.d.todayVisited.push(r.store);
+    S.ci = null;
+    openVisit(S.d.open);
+  } catch (e) { tg.MainButton.hideProgress(); tg.showAlert('Не получилось отметиться. Проверь интернет и нажми «Я на месте» ещё раз.'); }
+}
+function getGeo() {
+  return new Promise(res => {
+    setTimeout(() => res(null), 15000);
+    const viaBrowser = () => {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lon: p.coords.longitude }), () => res(null), { timeout: 12000, enableHighAccuracy: true });
+    };
+    try {
+      const lm = tg.LocationManager;
+      if (lm && lm.init) lm.init(() => {
+        if (lm.isLocationAvailable) lm.getLocation(g => g ? res({ lat: g.latitude, lon: g.longitude }) : viaBrowser());
+        else viaBrowser();
+      });
+      else viaBrowser();
+    } catch (e) { viaBrowser(); }
+  });
+}
+
+/* ---------- Визит ---------- */
+const draftKey = id => 'visit_' + id;
+let draftTimer;
+function saveDraft() {
+  if (!S.v) return;
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    const { answers, cats, text, photos } = S.v;
+    try { localStorage.setItem(draftKey(S.v.id), JSON.stringify({ answers, cats, text, photos })); }
+    catch (e) { try { localStorage.setItem(draftKey(S.v.id), JSON.stringify({ answers, cats, text, photos: [] })); } catch (e2) {} }
+  }, 400);
+}
+function openVisit(o) {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(draftKey(o.id))); } catch (e) {}
+  v = Object.assign({ answers: {}, cats: [], text: '', photos: [] }, v || {});
+  S.d.checklist.forEach(it => { if (!v.answers[it]) v.answers[it] = { ok: null, comment: '', photo: '' }; });
+  S.v = Object.assign({ id: o.id, store: o.store, arrived: o.arrived }, v);
+  renderVisit();
+}
+function renderVisit() {
+  const v = S.v;
+  setBack(() => { saveDraft(); S.v = null; renderHome(); });
+  tg.enableClosingConfirmation();
+  app.innerHTML = `<header><p class="sub">Визит идёт с ${esc(v.arrived)}</p><h1>${esc(v.store)}</h1></header>
+    <section><div class="step"><b>1</b>Чек-лист</div><div class="box" id="check"></div></section>
+    <section><div class="step"><b>2</b>Что сделано в магазине</div>
+      <p class="sub hint">Отметь, чем занимался(ась), и опиши своими словами: от лампочки до разговора с поставщиком.</p>
+      <div class="chips" id="cats"></div>
+      <textarea id="txt" placeholder="Что сделано и что осталось"></textarea>
+      <div class="shots" id="shots"></div>
+    </section>`;
+  const ch = document.getElementById('check');
+  if (!S.d.checklist.length) ch.innerHTML = '<div class="empty">Чек-лист пока не заполнен</div>';
+  S.d.checklist.forEach(it => ch.appendChild(itemEl(it)));
+
+  const cats = document.getElementById('cats');
+  S.d.cats.forEach(c => {
+    const b = el(`<button class="chip${v.cats.includes(c) ? ' on' : ''}">${esc(c)}</button>`);
+    b.onclick = () => {
+      const k = v.cats.indexOf(c);
+      k >= 0 ? v.cats.splice(k, 1) : v.cats.push(c);
+      b.classList.toggle('on', k < 0);
+      cats.classList.remove('missing');
+      saveDraft();
+    };
+    cats.appendChild(b);
+  });
+  const txt = document.getElementById('txt');
+  txt.value = v.text;
+  txt.oninput = () => { v.text = txt.value; txt.classList.remove('missing'); saveDraft(); };
+  renderShots();
+  setMain('Закончить визит', finish);
+}
+function itemEl(it) {
+  const a = S.v.answers[it];
+  const n = el(`<div class="item"><div class="iline"><div class="itxt">${esc(it)}</div>
+    <div class="yn"><button class="y${a.ok === true ? ' on' : ''}">Да</button><button class="n${a.ok === false ? ' on' : ''}">Нет</button></div></div></div>`);
+  n.querySelector('.y').onclick = () => { a.ok = true; saveDraft(); n.replaceWith(itemEl(it)); };
+  n.querySelector('.n').onclick = () => { a.ok = false; saveDraft(); n.replaceWith(itemEl(it)); };
+  if (a.ok === false) {
+    const box = el('<div class="fix"><textarea placeholder="Что не так и что сделано, чтобы исправить"></textarea></div>');
+    const ta = box.querySelector('textarea');
+    ta.value = a.comment;
+    ta.oninput = () => { a.comment = ta.value; ta.classList.remove('missing'); saveDraft(); };
+    box.appendChild(photoField(a, 'photo', '📷 Фото проблемы'));
+    n.appendChild(box);
+  }
+  return n;
+}
+function renderShots() {
+  const box = document.getElementById('shots');
+  box.innerHTML = '';
+  S.v.photos.forEach((src, i) => {
+    const b = el('<button class="shot" aria-label="Удалить фото"><img alt=""></button>');
+    b.querySelector('img').src = src;
+    b.onclick = () => tg.showConfirm('Удалить это фото?', yes => { if (yes) { S.v.photos.splice(i, 1); saveDraft(); renderShots(); } });
+    box.appendChild(b);
+  });
+  if (S.v.photos.length < 5) {
+    const add = el('<label class="shot" aria-label="Добавить фото работы">＋<small style="font-size:11px;display:block">фото</small><input type="file" accept="image/*" capture="environment"></label>');
+    add.querySelector('input').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      add.innerHTML = "…";
+      try { S.v.photos.push(await compress(f)); saveDraft(); } catch (err) { tg.showAlert('Не получилось открыть фото. Сделай снимок ещё раз.'); }
+      renderShots();
+    };
+    box.appendChild(add);
+  }
+}
+
+function photoField(obj, key, label) {
+  const l = el(`<label class="photo">${obj[key] ? '<img alt="Фото">' : '<span>' + label + '</span>'}<input type="file" accept="image/*" capture="environment"></label>`);
+  if (obj[key]) l.querySelector('img').src = obj[key];
+  l.querySelector('input').onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    l.classList.remove('missing');
+    const span = l.querySelector('span'); if (span) span.textContent = 'Сжимаю фото…';
+    try { obj[key] = await compress(f); saveDraft(); } catch (err) { tg.showAlert('Не получилось открыть фото. Сделай снимок ещё раз.'); }
+    l.replaceWith(photoField(obj, key, label));
+  };
+  return l;
+}
+function compress(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k);
+      c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('photo')); };
+    img.src = url;
+  });
+}
+
+async function finish() {
+  if (tg.MainButton.isProgressVisible) return;
+  const v = S.v, items = S.d.checklist, nodes = document.querySelectorAll('.item');
+  for (let i = 0; i < items.length; i++) {
+    const a = v.answers[items[i]], n = nodes[i];
+    if (a.ok === null) return fail(n, items[i] + ': отметь «Да» или «Нет».');
+    if (a.ok === false && !a.comment.trim()) return fail(n.querySelector('textarea'), items[i] + ': напиши, что не так.');
+    if (a.ok === false && !a.photo) return fail(n.querySelector('.photo'), items[i] + ': добавь фото.');
+  }
+  if (!v.cats.length) return fail(document.getElementById('cats'), 'Отметь, чем занимался(ась) в магазине.');
+  if (!v.text.trim()) return fail(document.getElementById('txt'), 'Напиши, что сделано.');
+
+  tg.MainButton.showProgress(false);
+  try {
+    const r = await api('finish', {
+      id: v.id, cats: v.cats, text: v.text,
+      photos: v.photos.map(p => p.split(',')[1]),
+      answers: items.map(it => { const a = v.answers[it]; return { item: it, ok: a.ok, comment: a.comment, photo: a.ok === false ? a.photo.split(',')[1] : '' }; })
+    });
+    tg.MainButton.hideProgress();
+    if (!r.ok) return tg.showAlert(r.error);
+    try { localStorage.removeItem(draftKey(v.id)); } catch (e) {}
+    tg.HapticFeedback.notificationOccurred('success');
+    setMain(null); setBack(null); tg.disableClosingConfirmation();
+    app.innerHTML = `<div class="done"><div class="big">✓</div><h1>Визит закрыт</h1><p class="sub">${esc(v.store)}, в магазине ${esc(r.dur)}</p><br><button class="btn" id="home">На главную</button></div>`;
+    S.v = null;
+    document.getElementById('home').onclick = () => { S.tab = 'today'; load(); };
+  } catch (e) { tg.MainButton.hideProgress(); tg.showAlert('Не получилось отправить. Проверь интернет и нажми «Закончить визит» ещё раз, всё заполненное сохранилось.'); }
+}
+
+load();
+</script>
+</body>
+</html>
